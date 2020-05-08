@@ -3,3 +3,4 @@ test/
 training/
 test.txt
 dataset.csv
+.DS_Store
