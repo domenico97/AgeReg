@@ -22,7 +22,7 @@ def main():
     AGE_BUCKETS = ["(0-9)", "(10-19)", "(20-29)", "(30-39)", "(40-49)", "(50-59)", "(60-69)", "(70-79)","(80-89)","(90-99)","(100+)"]
 
     mean,sum,n = 0,0,0
-    sg.ChangeLookAndFeel('LightGreen')
+    sg.ChangeLookAndFeel('DefaultNoMoreNagging')
 
     # load our serialized face detector model from disk
     print("[INFO] loading face detector model...")
@@ -34,41 +34,42 @@ def main():
 
     # define the window layout
     layout = [[sg.Image(filename='', key='image')],
-              [sg.ReadButton('Exit', size=(10, 1), font='Helvetica 14'),
-               sg.RButton('Settings', size=(10, 1), font='Any 14')]]
+              [sg.Button('Exit',font='Any 1',image_filename='exit.png',image_subsample=9, button_color=('#F0F0F0',sg.theme_background_color()), border_width=0),
+               sg.Button('Settings',font='Any 1',image_filename='settings.png',image_subsample=9, button_color=('#F0F0F0',sg.theme_background_color()), border_width=0)]]
 
     # create the window and show it without the plot
-    window = sg.Window('AgeReg',
-                       location=(200, 200))
-    window.Layout(layout).Finalize()
-
-   #Layout Settings page
-    layout_setting = [
-        [sg.Text('Impostazioni', size=(30, 1), font=("Helvetica", 25), text_color='blue')],
-        [sg.Text('Sesso')],
-        [sg.Radio('Maschio!     ', "RADIO1", default=True), sg.Radio('Femmina', "RADIO1")],
-        [sg.InputCombo(['Combobox 1', 'Combobox 2'], size=(20, 3))],
-        [sg.Text('_' * 100, size=(70, 1))],
-        [sg.Text('Choose Source and Destination Folders', size=(35, 1))],
-        [sg.RButton('Submit', size=(10, 1), font='Any 14'), sg.RButton('Cancel', size=(10, 1), font='Any 14')]]
-
-    window_setting = sg.Window('Impostazioni', location=(100, 100))
+    main_window = sg.Window('AgeReg',use_default_focus=False)
+    main_window.Layout(layout).Finalize()
 
     # ---===--- Event LOOP Read and display frames, operate the GUI --- #
-    cap = cv2.VideoCapture(0)
+    #cap = cv2.VideoCapture(0)
     while True:
-        button, values = window._ReadNonBlocking()
+        button, values = main_window._ReadNonBlocking()
 
         if button is 'Exit' or values is None:
+            print("[INFO] Exit button was pressed. Closing the program.")
             sys.exit(0)
         elif button == 'Settings':
-            window_setting.Layout(layout_setting).Finalize()
-            submit_button, values = window_setting._Read()
-            if submit_button is 'Submit' or values is None:
-                print("ok")
+            print("[INFO] Settings button was pressed.")
+            settings_window = createSettingsWindow()
+            while True:
+                settings_button, setting_values = settings_window._ReadNonBlocking()
+                if setting_values['modelToUse'] == 'Modello 1':
+                    settings_window.FindElement('explainer').Update("Model 1")
+                if setting_values['modelToUse'] == 'Modello 2':
+                    settings_window.FindElement('explainer').Update("Model 2")
+                if settings_button == 'Submit':
+                    print("[INFO] Settings button was pressed.")
+                    settings_window.close()
+                    break
+                if settings_button == 'Cancel':
+                    print("[INFO] Cancel button was pressed.")
+                    settings_window.close()
+                    break
 
 
 
+'''
         ret, frame = cap.read()
 
         # detect faces in the frame, and for each face in the frame,
@@ -133,7 +134,7 @@ def main():
 
         imgbytes = cv2.imencode('.png', frame)[1].tobytes()
         window.FindElement('image').update(data=imgbytes)
-
+'''
 
 '''def get_age(age):
     age = age
@@ -192,5 +193,24 @@ def detect_and_predict_age(frame, faceNet, ageNet):
     # return our results to the calling function
     return results
 
+def createSettingsWindow():
+    sex_layout = [
+        [sg.Radio('Uomo', "RADIO1", default=True), sg.Radio('Donna', "RADIO1")],
+    ]
 
+    # Layout Settings page
+    layout_setting = [
+        [sg.Text(' '*50),sg.Text('Impostazioni', font=("Helvetica", 13)),sg.Text(' '*50),sg.Image(filename='settings1.png',size=(50,50))],
+        #[sg.Text('_' * 100, size=(70, 1))],
+        [sg.Text('Modello da utilizzare', size=(70, 1))],
+        [sg.InputCombo(['Modello 1', 'Modello 2'], size=(20, 3),key='modelToUse', change_submits=True), sg.Text('Descrizione Modello', key='explainer')],
+        [sg.Text('_' * 100, size=(70, 1))],
+        [sg.Frame('Sesso', sex_layout, font='Any 12', title_color='black')],
+        [sg.Text('_' * 100, size=(70, 1))],
+        [sg.Button('Cancel', button_color=('White','Red'), size=(10, 1), font='Any 14'),
+         sg.Button('Submit', button_color=('White','Green'), size=(10, 1), font='Any 14')]]
+
+    window_setting = sg.Window('Impostazioni')
+    window_setting.Layout(layout_setting).Finalize()
+    return window_setting
 main()
