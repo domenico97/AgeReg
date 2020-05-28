@@ -1,4 +1,5 @@
 import sys
+import os
 
 if sys.version_info[0] >= 3:
     import PySimpleGUI as sg
@@ -17,9 +18,15 @@ from PIL import Image
 import io
 from sys import exit as exit
 
+modelList = os.listdir('Modelli/')
+descrList = ['']
+ethnicitiesList = ['Occidentale', 'Africana', 'Asiatica Orientale', 'Asiatica centro - meridionale', 'Non classificato']
+
 def main():
     # define the list of age buckets our age detector will predict
     AGE_BUCKETS = ["(0-9)", "(10-19)", "(20-29)", "(30-39)", "(40-49)", "(50-59)", "(60-69)", "(70-79)","(80-89)","(90-99)","(100+)"]
+    #lista dei modelli nella cartella. Usata per creare le descrizioni dei modelli
+
 
     mean,sum,n = 0,0,0
     sg.ChangeLookAndFeel('DefaultNoMoreNagging')
@@ -30,7 +37,7 @@ def main():
 
     # load our serialized age detector model from disk
     print("[INFO] loading age detector model...")
-    ageNet = tf.keras.models.load_model("img_128_80_0.10_80.h5")
+    ageNet = tf.keras.models.load_model("Modelli/img_128_80_0.10_80.h5")
 
     # define the window layout
     layout = [[sg.Image(filename='', key='image')],
@@ -54,10 +61,8 @@ def main():
             settings_window = createSettingsWindow()
             while True:
                 settings_button, setting_values = settings_window._ReadNonBlocking()
-                if setting_values['modelToUse'] == 'Modello 1':
-                    settings_window.FindElement('explainer').Update("Model 1")
-                if setting_values['modelToUse'] == 'Modello 2':
-                    settings_window.FindElement('explainer').Update("Model 2")
+                model_info = return_model_info(setting_values['modelToUse'])
+                settings_window.FindElement('explainer').Update(model_info)
                 if settings_button == 'Submit':
                     print("[INFO] Settings button was pressed.")
                     settings_window.close()
@@ -168,17 +173,25 @@ def detect_and_predict_age(frame, faceNet, ageNet):
         #cv2.imshow("avc", face)
         #key = cv2.waitKey(1)
         #face = color.rgb2gray(face)
+
+        #if B/N
+
         face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
         face = face / 255
         face = face.reshape(-1, face.shape[0], face.shape[1], 1)
         #face = np.reshape(face, (80,80,1))
+
+        # if solo immagini
+        feat = face
+        #if img e sex
+
 
         #print(face.shape)
         #img = np.squeeze(face)
         #cv2.imshow("avc", img)
         #key = cv2.waitKey(1)
 
-        age = ageNet.predict(face)
+        age = ageNet.predict(feat)
         endX = x + w
         endY = y + h
         # construct a dictionary consisting of both the face
@@ -195,22 +208,38 @@ def detect_and_predict_age(frame, faceNet, ageNet):
 
 def createSettingsWindow():
     sex_layout = [
-        [sg.Radio('Uomo', "RADIO1", default=True), sg.Radio('Donna', "RADIO1")],
+        [sg.Radio('Uomo', "RADIO1", default=True), sg.Radio('Donna', "RADIO1")]
     ]
-
+    model_layout = [
+        [sg.Combo(values=modelList,readonly=True,default_value=modelList[0],size=(30, 3), key='modelToUse', change_submits=True, pad=(10,10)),
+         sg.Text(' ' * 10,),
+         sg.Text('Parametri:\n- B/N o Colori \n- Features:(img=solo img, sex = img & sex, all = tutte)\n- Percentuale di Dropout\n- # livelli convoluzionali\n- % test set', key='explainer',pad=(10,10))]
+    ]
+    ethnicity_layout = [
+        [sg.Combo(values=ethnicitiesList,readonly=True, size=(30, 3), key='ethnicity', change_submits=True, pad=(10, 10))]
+    ]
     # Layout Settings page
     layout_setting = [
-        [sg.Text(' '*50),sg.Text('Impostazioni', font=("Helvetica", 13)),sg.Text(' '*50),sg.Image(filename='settings1.png',size=(50,50))],
+        [sg.Text(' '*25),sg.Text('Impostazioni', font=("Helvetica", 15)),sg.Text(' '*25),sg.Image(filename='settings1.png',size=(50,50))],
         #[sg.Text('_' * 100, size=(70, 1))],
-        [sg.Text('Modello da utilizzare', size=(70, 1))],
-        [sg.InputCombo(['Modello 1', 'Modello 2'], size=(20, 3),key='modelToUse', change_submits=True), sg.Text('Descrizione Modello', key='explainer')],
-        [sg.Text('_' * 100, size=(70, 1))],
-        [sg.Frame('Sesso', sex_layout, font='Any 12', title_color='black')],
-        [sg.Text('_' * 100, size=(70, 1))],
-        [sg.Button('Cancel', button_color=('White','Red'), size=(10, 1), font='Any 14'),
-         sg.Button('Submit', button_color=('White','Green'), size=(10, 1), font='Any 14')]]
+        [sg.Frame('Seleziona il modello da utilizzare', model_layout, font='Any 11', title_color='black',pad=(10,20))],
+        [sg.Text('_' * 60)],
+        [sg.Frame('Sesso', sex_layout, font='Any 11', title_color='black',pad=(10,10)),sg.Frame('Etnia', ethnicity_layout, font='Any 11', title_color='black',pad=(10,10))],
+        [sg.Text('NOTA: Le scelte di etnia e sesso non verrano considerate in caso di \nriconoscimento contemporaneo di più individui')],
+        [sg.Text('_' * 60)],
+        [sg.Button('Cancel', font='Any 1',image_filename='x.png',image_subsample=9, button_color=('White',sg.theme_background_color()), border_width=0),
+         sg.Button('Submit', font='Any 1',image_filename='ok.png',image_subsample=9, button_color=('White',sg.theme_background_color()), border_width=0)]]
 
-    window_setting = sg.Window('Impostazioni')
+    window_setting = sg.Window('Impostazioni',use_default_focus=False)
     window_setting.Layout(layout_setting).Finalize()
     return window_setting
+
+def return_model_info(modelName):
+    model_info = modelName + 'c'
+    return model_info
+
+
+
+
+
 main()
