@@ -39,12 +39,14 @@ sex = 0
 # Etnia dell'utente
 ethnicity = 0
 
+# Inizializzazioni delle variabili per effettuare la media dell'età
+mean, sum, n = 0, 0, 0
 
+modelInUse = 'Img Grigi'
 def main():
     # Lista degli age_buckets da predire
     AGE_BUCKETS = ["(0-9)", "(10-19)", "(20-29)", "(30-39)", "(40-49)", "(50-59)", "(60-69)", "(70-79)", "(80-89)", "(90-99)", "(100+)"]
-    # Inizializzazioni delle variabili per effettuare la media dell'età
-    mean, sum, n = 0, 0, 0
+
 
     # Tema della GUI
     sg.ChangeLookAndFeel('DefaultNoMoreNagging')
@@ -84,11 +86,11 @@ def main():
 
                 if settings_button == 'Submit':
                     print("[INFO] Settings button was pressed.")
-                    ageNet = setModel(modelsDict[setting_values['modelToUse']])
+                    global modelInUse, sex, ethnicity
+                    modelInUse = setting_values['modelToUse']
+                    ageNet = setModel(modelsDict[modelInUse])
                     #print(setting_values)
-                    global sex
                     sex = 0 if setting_values['Uomo'] else 1
-                    global ethnicity
                     ethnicity = ethnicitiesDict[setting_values['ethnicity']]
                     #print(setting_values['modelToUse'], sex, ethnicity)
                     settings_window.close()
@@ -105,6 +107,7 @@ def main():
         # Detection dei volti e per ognuno predizione dell'età
         results = detect_and_predict_age(frame, faceNet, ageNet)
 
+        global mean, sum, n
         # Se non viene rilevato nessun volto o ne vengono rilevati più di uno vengono resettati i contatori
         # In questi casi non è possibile fare la media delle età
         if not results or len(results) > 1:
@@ -164,6 +167,10 @@ def main():
             middleX_str = int(middleX - (textsize[0]/2))
             cv2.putText(frame, "anni", (middleX_str, startY + 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
+            # Stampa del modello utilizzato
+
+            frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cv2.putText(frame, modelInUse, (35, frameHeight - 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
         imgbytes = cv2.imencode('.png', frame)[1].tobytes()
         main_window.FindElement('image').update(data=imgbytes)
@@ -210,7 +217,6 @@ def detect_and_predict_age(frame, faceNet, ageNet):
         #face = np.reshape(face, (80,80,1))
 
         # Costruzione delle feature da passare al modello
-        feat = None
         if modelType == 1:
             feat = np.array([sex])
         elif modelType == 2:
@@ -223,7 +229,7 @@ def detect_and_predict_age(frame, faceNet, ageNet):
         #key = cv2.waitKey(1)
 
         # Predict dell'età dell'utente
-        age = ageNet.predict(face) if modelType==0 else ageNet.predict([face,feat])
+        age = ageNet.predict(face) if modelType == 0 else ageNet.predict([face, feat])
         endX = x + w
         endY = y + h
 
@@ -268,11 +274,8 @@ def createSettingsWindow():
 
 
 def setModel(model):
-
     # Riferimento alle variabili globali
-    global colorConversion
-    global imageChannels
-    global modelType
+    global colorConversion, imageChannels, modelType
 
     # Setting delle configurazioni appropriate dei modelli
     if 'RGB' in model:
@@ -292,8 +295,14 @@ def setModel(model):
     # Caricamento del modello di face detection
     print("[INFO] loading age detector model:" + model)
     ageNet = tf.keras.models.load_model("Modelli/" + model)
+    resetCounters()
 
     return ageNet
+
+
+def resetCounters():
+    global mean, sum, n
+    mean, sum, n = 0, 0, 0
 
 
 main()
