@@ -24,7 +24,14 @@ ethnicitiesDict = {'Occidentale' : 0, 'Africana' : 1, 'Asiatica Orientale' : 2, 
 modelsDict = {'Img/Sex Colori': 'RGBsex_200_0.15_3CL_0.2.h5', 'Img Colori': 'RGBimg_200_0.15_3CL_0.2.h5', 'Img/Sex/Eth Colori': 'RGBall_200_0.15_3CL_0.2.h5', 'Img Grigi': 'img_200_0.15_3CL_0.2.h5'}
 modelsDescriptions = list(modelsDict.keys())
 ethnicitiesDescriptions = list(ethnicitiesDict.keys())
-
+#if model is rgb or grayscale
+rgb = False
+#0 = only image, 1 = img+sex, 2 = all
+modelType = 0
+imageChannels = 1
+colorConversion = cv2.COLOR_BGR2GRAY
+sex = 0
+ethnicity = 0
 def main():
     # define the list of age buckets our age detector will predict
     AGE_BUCKETS = ["(0-9)", "(10-19)", "(20-29)", "(30-39)", "(40-49)", "(50-59)", "(60-69)", "(70-79)", "(80-89)", "(90-99)", "(100+)"]
@@ -183,13 +190,18 @@ def detect_and_predict_age(frame, faceNet, ageNet):
 
         #if B/N
 
-        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+        face = cv2.cvtColor(face, colorConversion)
         face = face / 255
-        face = face.reshape(-1, face.shape[0], face.shape[1], 1)
+        face = face.reshape(-1, face.shape[0], face.shape[1], imageChannels)
         #face = np.reshape(face, (80,80,1))
 
         # if solo immagini
+
         feat = face
+        if modelType==1 :
+            feat = [face,sex]
+        elif modelType==2:
+            feat = [face,sex,ethnicity]
         #if img e sex
 
 
@@ -244,6 +256,20 @@ def createSettingsWindow():
 def setModel(model):
     # load our serialized age detector model from disk
     print("[INFO] loading age detector model:" + model)
+    if 'RGB' in model:
+        colorConversion = cv2.COLOR_BGR2RGB
+        imageChannels = 3
+    else:
+        colorConversion = cv2.COLOR_BGR2GRAY
+        imageChannels = 1
+
+    if 'img' in model:
+        modelType = 0
+    elif 'sex' in model:
+        modelType = 1
+    elif 'all' in model:
+        modelType = 2
+
     ageNet = tf.keras.models.load_model("Modelli/" + model)
     return ageNet
 
