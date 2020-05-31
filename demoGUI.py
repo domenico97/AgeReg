@@ -68,7 +68,6 @@ def main():
 
         if button is 'Exit' or values is None:
             print("[INFO] Exit button was pressed. Closing the program.")
-            #main_window.close()
             sys.exit(0)
         elif button == 'Settings':
             print("[INFO] Settings button was pressed.")
