@@ -170,7 +170,7 @@ def main():
             # Stampa del modello utilizzato
 
             frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cv2.putText(frame, modelInUse, (35, frameHeight - 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            cv2.putText(frame, modelInUse, (35, frameHeight - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
         imgbytes = cv2.imencode('.png', frame)[1].tobytes()
         main_window.FindElement('image').update(data=imgbytes)
@@ -221,6 +221,7 @@ def detect_and_predict_age(frame, faceNet, ageNet):
             feat = np.array([sex])
         elif modelType == 2:
             feat = np.array([sex, ethnicity])
+            feat = np.reshape(feat, (1, 2))
 
 
         #print(face.shape)
@@ -229,7 +230,7 @@ def detect_and_predict_age(frame, faceNet, ageNet):
         #key = cv2.waitKey(1)
 
         # Predict dell'età dell'utente
-        age = ageNet.predict(face) if modelType == 0 else ageNet.predict([face, feat])
+        age = ageNet.predict(face) if modelType == 0 else ageNet.predict(x=[face, np.asarray(feat)])
         endX = x + w
         endY = y + h
 
