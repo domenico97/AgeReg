@@ -8,7 +8,7 @@ else:
 import numpy as np
 import cv2
 import tensorflow as tf
-
+import os
 # Dizionario delle etnie
 ethnicitiesDict = {'Occidentale': 0, 'Africana': 1, 'Asiatica Orientale': 2, 'Asiatica centro - meridionale': 3, 'Non classificato': 4}
 # Lista delle descrizioni delle etnie
@@ -23,8 +23,6 @@ modelsDescriptions = list(modelsDict.keys())
 modelType = 0
 # Numero di canali dell'immagine da caricare. Default = 1 (Scala di grigi)
 imageChannels = 1
-# Tipo di conversione di colori da effettuare. Default = Conversione in scala di grigi
-#colorConversion = cv2.COLOR_BGR2GRAY
 # Sesso dell'utente
 sex = 0
 # Etnia dell'utente
@@ -42,7 +40,7 @@ def main():
 
 
     # Tema della GUI
-    sg.ChangeLookAndFeel('DefaultNoMoreNagging')
+    sg.ChangeLookAndFeel('Reddit')
 
     # Caricamento del modello di face detection
     print("[INFO] loading face detector model...")
@@ -70,6 +68,7 @@ def main():
 
         if button is 'Exit' or values is None:
             print("[INFO] Exit button was pressed. Closing the program.")
+            #main_window.close()
             sys.exit(0)
         elif button == 'Settings':
             print("[INFO] Settings button was pressed.")
@@ -82,11 +81,9 @@ def main():
                     global modelInUse, sex, ethnicity, recThreshold
                     modelInUse = setting_values['modelToUse']
                     ageNet = setModel(modelsDict[modelInUse])
-                    #print(setting_values)
                     sex = 0 if setting_values['Uomo'] else 1
                     ethnicity = ethnicitiesDict[setting_values['ethnicity']]
                     recThreshold = int(setting_values['recThreshold'])
-                    #print(setting_values['modelToUse'], sex, ethnicity)
                     settings_window.close()
                     break
 
@@ -115,8 +112,6 @@ def main():
             # Media delle età
             sum += age
             mean = sum / n
-
-            # text = "{}  {}".format(mean.astype(int), age.astype(int))
             text = "{}".format(int(mean))
 
         for r in results:
@@ -164,27 +159,11 @@ def main():
             cv2.putText(frame, "anni", (middleX_str, startY + 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
             # Stampa del modello utilizzato
-
             frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             cv2.putText(frame, modelInUse, (35, frameHeight - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
         imgbytes = cv2.imencode('.png', frame)[1].tobytes()
         main_window.FindElement('image').update(data=imgbytes)
-
-
-'''def get_age(age):
-    age = age
-    if age >= 0 and age <= 3:return "0-3"
-    if age >= 4 and age <= 10:return "4-10"
-    if age >= 11 and age <= 20:return "11-20"
-    if age >= 21 and age <= 30:return "21-30"
-    if age >= 31 and age <= 40: return "31-40"
-    if age >= 41 and age <= 50: return "41-50"
-    if age >= 51 and age <= 60: return "51-60"
-    if age >= 61 and age <= 70: return "61-70"
-    if age >= 71 and age <= 80: return "71-80"
-    if age >= 81 and age <= 90: return "81-90"
-    if age >= 91: return "91-100+"'''
 
 
 def detect_and_predict_age(frame, faceNet, ageNet):
@@ -194,30 +173,18 @@ def detect_and_predict_age(frame, faceNet, ageNet):
     # Detection dei volti
     faces = faceNet.detectMultiScale(frame, 1.1, recThreshold)
 
-    # Estraggo le coordinate del volto
+    # Estrazione delle coordinate del volto
     for (x, y, w, h) in faces:
         face = frame[y:y + h, x:x + w, :]
-        #print(frame.shape)
-        #print(face.shape)
 
         # Resize del volto per il passaggio al modello
         face = cv2.resize(face, dsize=(80, 80))
-
-        #cv2.imshow("prova1", face)
-        #key = cv2.waitKey(1)
-        #face = color.rgb2gray(face)
 
         # Conversione di colore del volto in grayscale se necessario
         if imageChannels == 1:
             face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
         face = face / 255
         face = face.reshape(-1, face.shape[0], face.shape[1], imageChannels)
-        #face = np.reshape(face, (80,80,1))
-
-        #prova = np.squeeze(face)
-        #print(colorConversion)
-        #print(prova.shape)
-        #cv2.imshow("avc", prova)
 
         # Costruzione delle feature da passare al modello
         if modelType == 1:
@@ -225,11 +192,6 @@ def detect_and_predict_age(frame, faceNet, ageNet):
         elif modelType == 2:
             feat = np.array([sex, ethnicity])
             feat = np.reshape(feat, (1, 2))
-
-        #print(face.shape)
-        #img = np.squeeze(face)
-        #cv2.imshow("avc", img)
-        #key = cv2.waitKey(1)
 
         # Predict dell'età dell'utente
         age = ageNet.predict(face) if modelType == 0 else ageNet.predict(x=[face, np.asarray(feat)])
@@ -260,7 +222,7 @@ def createSettingsWindow():
         [sg.Combo(values=ethnicitiesDescriptions, readonly=True, default_value=ethnicitiesDescriptions[ethnicity], size=(30, 3), key='ethnicity', change_submits=True, pad=(10, 10))]
     ]
     slider_layout = [
-        [sg.Slider(range=(2, 30), default_value=recThreshold, key='recThreshold', size=(20, 15), orientation='horizontal', font=('Helvetica', 12)),sg.Text('NOTA: Se il volto non viene riconosciuto,\nabbasare la soglia')]
+        [sg.Slider(range=(2, 30), default_value=recThreshold, key='recThreshold', size=(20, 15), orientation='horizontal', font=('Helvetica', 12)),sg.Text('NOTA: Se il volto non viene riconosciuto,\nabbassare la soglia')]
     ]
 
     layout_setting = [
@@ -282,16 +244,12 @@ def createSettingsWindow():
 
 
 def setModel(model):
-    # Riferimento alle variabili globali
-    #global colorConversion
     global imageChannels, modelType
 
     # Setting delle configurazioni appropriate dei modelli
     if 'RGB' in model:
-        #colorConversion = cv2.COLOR_BGR2BGRA
         imageChannels = 3
     else:
-        #colorConversion = cv2.COLOR_BGR2GRAY
         imageChannels = 1
 
     if 'img' in model:
