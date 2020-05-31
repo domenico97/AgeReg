@@ -1,22 +1,13 @@
 import sys
-import os
 
 if sys.version_info[0] >= 3:
     import PySimpleGUI as sg
 else:
     import PySimpleGUI27 as sg
 
-from imutils.video import VideoStream
 import numpy as np
-import argparse
-import imutils
-import time
 import cv2
-import os
 import tensorflow as tf
-from PIL import Image
-import io
-from sys import exit as exit
 
 # Dizionario delle etnie
 ethnicitiesDict = {'Occidentale': 0, 'Africana': 1, 'Asiatica Orientale': 2, 'Asiatica centro - meridionale': 3, 'Non classificato': 4}
@@ -33,12 +24,14 @@ modelType = 0
 # Numero di canali dell'immagine da caricare. Default = 1 (Scala di grigi)
 imageChannels = 1
 # Tipo di conversione di colori da effettuare. Default = Conversione in scala di grigi
-colorConversion = cv2.COLOR_BGR2GRAY
+#colorConversion = cv2.COLOR_BGR2GRAY
 # Sesso dell'utente
 sex = 0
 # Etnia dell'utente
 ethnicity = 0
 
+# Soglia del riconoscimento facciale
+recThreshold = 20
 # Inizializzazioni delle variabili per effettuare la media dell'età
 mean, sum, n = 0, 0, 0
 
@@ -82,21 +75,22 @@ def main():
             print("[INFO] Settings button was pressed.")
             settings_window = createSettingsWindow()
             while True:
-                settings_button, setting_values = settings_window._ReadNonBlocking()
+                settings_button, setting_values = settings_window.Read()
 
                 if settings_button == 'Submit':
                     print("[INFO] Settings button was pressed.")
-                    global modelInUse, sex, ethnicity
+                    global modelInUse, sex, ethnicity, recThreshold
                     modelInUse = setting_values['modelToUse']
                     ageNet = setModel(modelsDict[modelInUse])
                     #print(setting_values)
                     sex = 0 if setting_values['Uomo'] else 1
                     ethnicity = ethnicitiesDict[setting_values['ethnicity']]
+                    recThreshold = int(setting_values['recThreshold'])
                     #print(setting_values['modelToUse'], sex, ethnicity)
                     settings_window.close()
                     break
 
-                if settings_button == 'Cancel':
+                if settings_button == 'Cancel' or settings_button == sg.WIN_CLOSED:
                     print("[INFO] Cancel button was pressed.")
                     settings_window.close()
                     break
@@ -122,29 +116,30 @@ def main():
             sum += age
             mean = sum / n
 
-            #text = "{}  {}".format(mean.astype(int), age.astype(int))
-            text = "{}".format(mean.astype(int))
+            # text = "{}  {}".format(mean.astype(int), age.astype(int))
+            text = "{}".format(int(mean))
 
         for r in results:
 
             # Se viene rilevato più di un volto si utilizza la classificazione con gli age_buckets
             if len(results) > 1:
-                 # Estrazione dell'età predetta
-                 age = r["age"][0][0].astype(int)
-                 # Posizionamento dell'età nell'age_bucket appropriato
-                 digits = len(str(age))
-                 if digits == 1:
+                # Estrazione dell'età predetta
+                age = r["age"][0][0].astype(int)
+                # Posizionamento dell'età nell'age_bucket appropriato
+                digits = len(str(age))
+                if digits == 1:
                     age = AGE_BUCKETS[0]
-                 elif digits == 3:
+                elif digits == 3:
                     age = AGE_BUCKETS[10]
-                 else:
+                else:
                     i = str(age)
                     age = AGE_BUCKETS[int(i[0])]
 
-                 text = "{}".format(age)
+                text = "{}".format(age)
 
             (startX, startY, endX, endY) = r["loc"]
             y = startY - 10 if startY - 10 > 10 else startY + 10
+
             # Disegno degli angoli della face detection
             cv2.line(frame, (startX, startY), (startX + 50, startY), (255, 255, 255), 2)
             cv2.line(frame, (startX, startY), (startX, startY + 50), (255, 255, 255), 2)
@@ -157,6 +152,7 @@ def main():
 
             cv2.line(frame, (endX, endY), (endX - 50, endY), (255, 255, 255), 2)
             cv2.line(frame, (endX, endY), (endX, endY - 50), (255, 255, 255), 2)
+
             # Disegno dell'età in posizione centrale
             middleX = int((startX + endX)/2)
             textsize = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 8)[0]
@@ -196,7 +192,7 @@ def detect_and_predict_age(frame, faceNet, ageNet):
     # Inizializzazione della lista dei risultati
     results = []
     # Detection dei volti
-    faces = faceNet.detectMultiScale(frame, 1.1, 20)
+    faces = faceNet.detectMultiScale(frame, 1.1, recThreshold)
 
     # Estraggo le coordinate del volto
     for (x, y, w, h) in faces:
@@ -206,15 +202,22 @@ def detect_and_predict_age(frame, faceNet, ageNet):
 
         # Resize del volto per il passaggio al modello
         face = cv2.resize(face, dsize=(80, 80))
-        #cv2.imshow("avc", face)
+
+        #cv2.imshow("prova1", face)
         #key = cv2.waitKey(1)
         #face = color.rgb2gray(face)
 
-        # Conversione di colore del volto
-        face = cv2.cvtColor(face, colorConversion)
+        # Conversione di colore del volto in grayscale se necessario
+        if imageChannels == 1:
+            face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
         face = face / 255
         face = face.reshape(-1, face.shape[0], face.shape[1], imageChannels)
         #face = np.reshape(face, (80,80,1))
+
+        #prova = np.squeeze(face)
+        #print(colorConversion)
+        #print(prova.shape)
+        #cv2.imshow("avc", prova)
 
         # Costruzione delle feature da passare al modello
         if modelType == 1:
@@ -222,7 +225,6 @@ def detect_and_predict_age(frame, faceNet, ageNet):
         elif modelType == 2:
             feat = np.array([sex, ethnicity])
             feat = np.reshape(feat, (1, 2))
-
 
         #print(face.shape)
         #img = np.squeeze(face)
@@ -246,25 +248,30 @@ def detect_and_predict_age(frame, faceNet, ageNet):
 
 def createSettingsWindow():
     sex_layout = [
-        [sg.Radio('Uomo', "SEX", key='Uomo', default=True), sg.Radio('Donna', "SEX", key='Donna')]
+        [sg.Radio('Uomo', "SEX", key='Uomo'), sg.Radio('Donna', "SEX", key='Donna')]
     ]
 
     model_layout = [
-        [sg.Combo(values=modelsDescriptions, readonly=True, default_value='Img Grigi', size=(30, 3), key='modelToUse', change_submits=True, pad=(10, 10)),
+        [sg.Combo(values=modelsDescriptions, readonly=True, default_value=modelInUse, size=(30, 3), key='modelToUse', change_submits=True, pad=(10, 10)),
          sg.Text(' ' * 10,),
          sg.Text('Configurazione:\n   Percentuale di Dropout : 0.15\n   # livelli convoluzionali : 3\n   % test set : 20%', key='explainer', pad=(10, 10))]
     ]
     ethnicity_layout = [
-        [sg.Combo(values=ethnicitiesDescriptions, readonly=True, default_value=ethnicitiesDescriptions[0], size=(30, 3), key='ethnicity', change_submits=True, pad=(10, 10))]
+        [sg.Combo(values=ethnicitiesDescriptions, readonly=True, default_value=ethnicitiesDescriptions[ethnicity], size=(30, 3), key='ethnicity', change_submits=True, pad=(10, 10))]
+    ]
+    slider_layout = [
+        [sg.Slider(range=(2, 30), default_value=recThreshold, key='recThreshold', size=(20, 15), orientation='horizontal', font=('Helvetica', 12)),sg.Text('NOTA: Se il volto non viene riconosciuto,\nabbasare la soglia')]
     ]
 
     layout_setting = [
         [sg.Text(' '*25), sg.Text('Impostazioni', font=("Helvetica", 15)), sg.Text(' '*25), sg.Image(filename='Immagini/settings1.png', size=(50, 50))],
         [sg.Frame('Seleziona il modello da utilizzare', model_layout, font='Any 11', title_color='black', pad=(10, 20))],
-        [sg.Text('_' * 60)],
+        [sg.Text('_' * 70)],
         [sg.Frame('Sesso', sex_layout, font='Any 11', title_color='black', pad=(10,10)), sg.Frame('Etnia', ethnicity_layout, font='Any 11', title_color='black', pad=(10, 10))],
-        [sg.Text('NOTA: Le scelte di etnia e sesso non verrano considerate in caso di \nriconoscimento contemporaneo di più individui')],
-        [sg.Text('_' * 60)],
+        [sg.Text('NOTA: Le scelte di etnia e sesso non verrano considerate in caso di riconoscimento\n contemporaneo di più individui')],
+        [sg.Text('_' * 70)],
+        [sg.Frame('Soglia riconoscimento facciale', slider_layout, font='Any 11', title_color='black', pad=(10, 20))],
+        [sg.Text('_' * 70)],
         [sg.Button('Cancel', font='Any 1', image_filename='Immagini/x.png', image_subsample=9, button_color=('White', sg.theme_background_color()), border_width=0),
          sg.Button('Submit', font='Any 1', image_filename='Immagini/ok.png', image_subsample=9, button_color=('White', sg.theme_background_color()), border_width=0)]]
     # Creazione della finestra di settings
@@ -276,14 +283,15 @@ def createSettingsWindow():
 
 def setModel(model):
     # Riferimento alle variabili globali
-    global colorConversion, imageChannels, modelType
+    #global colorConversion
+    global imageChannels, modelType
 
     # Setting delle configurazioni appropriate dei modelli
     if 'RGB' in model:
-        colorConversion = cv2.COLOR_BGR2RGB
+        #colorConversion = cv2.COLOR_BGR2BGRA
         imageChannels = 3
     else:
-        colorConversion = cv2.COLOR_BGR2GRAY
+        #colorConversion = cv2.COLOR_BGR2GRAY
         imageChannels = 1
 
     if 'img' in model:
