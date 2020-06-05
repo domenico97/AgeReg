@@ -30,11 +30,20 @@ ethnicity = 0
 
 # Soglia del riconoscimento facciale
 recThreshold = 20
+
 # Inizializzazioni delle variabili per effettuare la media dell'età
 mean, sum, n = 0, 0, 0
 
+# Modello keras della rete
+ageNet = None
+
+# Variabile utilizzata per settare il modello di default in presenza di più soggetti
+hasMoreSubjects = False
+
 modelInUse = 'Img Grigi'
+
 def main():
+    global ageNet
     # Lista degli age_buckets da predire
     AGE_BUCKETS = ["(0-9)", "(10-19)", "(20-29)", "(30-39)", "(40-49)", "(50-59)", "(60-69)", "(70-79)", "(80-89)", "(90-99)", "(100+)"]
 
@@ -56,7 +65,7 @@ def main():
                sg.Button('Settings', font='Any 1', image_filename='Immagini/settings.png', image_subsample=9, button_color=('#F0F0F0', sg.theme_background_color()), border_width=0)]]
 
     # Creazione della finestra principale
-    main_window = sg.Window('AgeReg', use_default_focus=False)
+    main_window = sg.Window('AgeReg', use_default_focus=False, location=(200, 200))
     main_window.Layout(layout).Finalize()
 
     # Definizione sorgente di input (webcam)
@@ -77,12 +86,12 @@ def main():
 
                 if settings_button == 'Submit':
                     print("[INFO] Settings button was pressed.")
-                    global modelInUse, sex, ethnicity, recThreshold
-                    modelInUse = setting_values['modelToUse']
-                    ageNet = setModel(modelsDict[modelInUse])
+                    global sex, ethnicity, recThreshold, hasMoreSubjects
+                    ageNet = setModel(setting_values['modelToUse'])
                     sex = 0 if setting_values['Uomo'] else 1
                     ethnicity = ethnicitiesDict[setting_values['ethnicity']]
                     recThreshold = int(setting_values['recThreshold'])
+                    hasMoreSubjects = False
                     settings_window.close()
                     break
 
@@ -93,6 +102,7 @@ def main():
 
         # Lettura frame di input
         ret, frame = cap.read()
+
 
         # Detection dei volti e per ognuno predizione dell'età
         results = detect_and_predict_age(frame, faceNet, ageNet)
@@ -165,12 +175,17 @@ def main():
         main_window.FindElement('image').update(data=imgbytes)
 
 
-def detect_and_predict_age(frame, faceNet, ageNet):
-
+def detect_and_predict_age(frame, faceNet, ageNetwork):
+    global hasMoreSubjects, ageNet
     # Inizializzazione della lista dei risultati
     results = []
     # Detection dei volti
     faces = faceNet.detectMultiScale(frame, 1.1, recThreshold)
+    if (not hasMoreSubjects) and len(faces) > 1:
+        ageNet = setModel('Img Grigi')
+        ageNetwork = ageNet
+        hasMoreSubjects = True
+
 
     # Estrazione delle coordinate del volto
     for (x, y, w, h) in faces:
@@ -193,7 +208,7 @@ def detect_and_predict_age(frame, faceNet, ageNet):
             feat = np.reshape(feat, (1, 2))
 
         # Predict dell'età dell'utente
-        age = ageNet.predict(face) if modelType == 0 else ageNet.predict(x=[face, np.asarray(feat)])
+        age = ageNetwork.predict(face) if modelType == 0 else ageNetwork.predict(x=[face, np.asarray(feat)])
         endX = x + w
         endY = y + h
 
@@ -243,24 +258,26 @@ def createSettingsWindow():
 
 
 def setModel(model):
-    global imageChannels, modelType
+    global imageChannels, modelType, modelInUse
 
+    value = modelsDict[model]
+    modelInUse = model
     # Setting delle configurazioni appropriate dei modelli
-    if 'RGB' in model:
+    if 'RGB' in value:
         imageChannels = 3
     else:
         imageChannels = 1
 
-    if 'img' in model:
+    if 'img' in value:
         modelType = 0
-    elif 'sex' in model:
+    elif 'sex' in value:
         modelType = 1
-    elif 'all' in model:
+    elif 'all' in value:
         modelType = 2
 
     # Caricamento del modello di face detection
-    print("[INFO] loading age detector model:" + model)
-    ageNet = tf.keras.models.load_model("Modelli/" + model)
+    print("[INFO] loading age detector model:" + value)
+    ageNet = tf.keras.models.load_model("Modelli/" + value)
     resetCounters()
 
     return ageNet
